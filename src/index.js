@@ -30,6 +30,11 @@ class ExportEnv {
             required: false,
             type: "string",
           },
+          skipFailure: {
+            usage: 'Allow failures while generating remote envs. Useful for first deployments (e.g. "--skipFailure")',
+            required: false,
+            type: "boolean",
+          },
           all: {
             usage: 'Merge environment variables of all functions into a single .env file (e.g. "--all")',
             required: false,
@@ -121,38 +126,43 @@ class ExportEnv {
   }
 
   resolveEnvVars() {
-    return BbPromise.try(() => {
-      this._loadConfig();
-      if (!this.isEnabled) {
-        return BbPromise.resolve();
-      }
-
-      const sls = this.serverless;
-      const AWS = this.serverless.providers.aws;
-      const globalEnv = this.globalEnvironmentVariables;
-      const maps = {
-        refMap: this.refMap,
-        getAttMap: this.getAttMap,
-        importValueMap: this.importValueMap,
-      };
-      return BbPromise.all([describeStack(AWS), listStackResources(AWS), listExports(AWS)]).then(
-        ([stack, resources, exports]) => {
-          // Resolve global and function environment variables
-          return BbPromise.all([
-            resolveCloudFormationEnvVariables(sls, globalEnv, stack, resources, exports, maps).then(
-              (resolved) => (this.globalEnvironmentVariables = resolved)
-            ),
-            BbPromise.all(
-              _.map(this.functionEnvironmentVariables, (funcEnv, funcName) =>
-                resolveCloudFormationEnvVariables(sls, funcEnv, stack, resources, exports, maps).then(
-                  (resolved) => (this.functionEnvironmentVariables[funcName] = resolved)
-                )
-              )
-            ),
-          ]).return();
+    try {
+      return BbPromise.try(() => {
+        this._loadConfig();
+        if (!this.isEnabled) {
+          return BbPromise.resolve();
         }
-      );
-    });
+
+        const sls = this.serverless;
+        const AWS = this.serverless.providers.aws;
+        const globalEnv = this.globalEnvironmentVariables;
+        const maps = {
+          refMap: this.refMap,
+          getAttMap: this.getAttMap,
+          importValueMap: this.importValueMap,
+        };
+        return BbPromise.all([describeStack(AWS), listStackResources(AWS), listExports(AWS)]).then(
+          ([stack, resources, exports]) => {
+            // Resolve global and function environment variables
+            return BbPromise.all([
+              resolveCloudFormationEnvVariables(sls, globalEnv, stack, resources, exports, maps).then(
+                (resolved) => (this.globalEnvironmentVariables = resolved)
+              ),
+              BbPromise.all(
+                _.map(this.functionEnvironmentVariables, (funcEnv, funcName) =>
+                  resolveCloudFormationEnvVariables(sls, funcEnv, stack, resources, exports, maps).then(
+                    (resolved) => (this.functionEnvironmentVariables[funcName] = resolved)
+                  )
+                )
+              ),
+            ]).return();
+          }
+        );
+      });
+    } catch (e) {
+      if (this.options.skipFailure) console.debug(e);
+      else throw e;
+    }
   }
 
   setEnvVars() {
