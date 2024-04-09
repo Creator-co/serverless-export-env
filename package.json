@@ -1,6 +1,6 @@
 {
   "name": "@creator.co/serverless-export-env",
-  "version": "2.3.0",
+  "version": "2.3.1",
   "description": "Serverless plugin to export environment variables into a .env file",
   "main": "src/index.js",
   "author": "Andre Rabold",
